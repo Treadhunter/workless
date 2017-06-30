@@ -1,4 +1,5 @@
-require 'heroku-api'
+#require 'heroku-api'
+require 'platform-api'
 
 module Delayed
   module Workless
@@ -7,15 +8,23 @@ module Delayed
         extend Delayed::Workless::Scaler::HerokuClient
 
         def self.up
-          client.post_ps_scale(ENV['APP_NAME'], 'worker', self.workers_needed) if self.workers_needed > self.min_workers and self.workers < self.workers_needed
+          # client.post_ps_scale(ENV['APP_NAME'], 'worker', self.workers_needed) if self.workers_needed > self.min_workers and self.workers < self.workers_needed
+          client.formation.update(ENV['APP_NAME'], 'worker', {size: 'standard-1X', quantity: self.workers_needed}) if self.workers_needed > self.min_workers and self.workers < self.workers_needed
         end
 
         def self.down
-          client.post_ps_scale(ENV['APP_NAME'], 'worker', self.min_workers) unless self.jobs.count > 0 or self.workers == self.min_workers
+          #client.post_ps_scale(ENV['APP_NAME'], 'worker', self.min_workers) unless self.jobs.count > 0 or self.workers == self.min_workers
+          client.formation.update(ENV['APP_NAME'], 'worker', {size: 'standard-1X', quantity: self.min_workers}) unless self.jobs.count > 0 or self.workers == self.min_workers
         end
 
         def self.workers
-          client.get_ps(ENV['APP_NAME']).body.count { |p| p["process"] =~ /worker\.\d?/ }
+          #client.get_ps(ENV['APP_NAME']).body.count { |p| p["process"] =~ /worker\.\d?/ }
+          worker_list = client.formation.list(ENV['APP_NAME']).select{|h| h["type"]=="worker"}
+          if worker_list.nil?
+            return 0
+          else
+            return worker_list.first["quantity"]
+          end
         end
 
         # Returns the number of workers needed based on the current number of pending jobs and the settings defined by:
